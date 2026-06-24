@@ -1,0 +1,81 @@
+1. create venv and activate 
+2. install dependencies (uvicorn , fastapi , pydantic ,sqlalchemy ,mysql-connector-python )
+3. create main.py which will have fastapi app >> from fastapi import Fastapi  create an app = Fastapi() 
+4. create function returning output with app decorator having instance of method( get, post, put, delete) with route as an argument string 
+
+5.create database_models.py or models.py which will create db object 
+5.1 from sqlalchemy import Column , string, Interger , Float ; from sqlalchemy.ext.declarative import declarative_base >> create Base var having declarative_base()
+5.2 create Product function arg Base :  __tablename__ = "{table_name}" >> id=Column(Interger,primary key = True ,index= True) name= Column(String(50)) description =Column(String(500)) price = Column(Float) quantity = Column( Integer)
+
+6. create database.py for connecting with database 
+6.1 from sqlalchemy import create_engine to create an engine giving a database table url as a argument (mysql+mysql-connector://root:{password}@localhost:3306/{db_name})  
+6.1 ! save argument in variable and give to create_engine !
+6.2 from sqlalchemy.orm import sessionmaker >> create session variable having sessionmaker with arg (bind=engine,autocommit= False , autoflush = False)
+
+7. in main.py from database import session,engine >> create functin who has var db calling(starting) session() try: yeild: db finally: close:db.close()
+8. Creating Pydantic Model (model.py)
+8. Import BaseModel from pydantic
+8.1 Create Product class inheriting BaseModel
+8.2 Define fields: id (int), name (str), description (str), price (float), quantity (int)
+8.3 Pydantic handles automatic data validation and serialization
+
+9. Database Initialization Function
+9. Create init_db() function in main.py
+9.1 Create db session instance: db = session()
+9.2 Check if products table is empty: count = db.query(database_models.Product).count()
+9.3 If count == 0, iterate over sample products list
+9.4 For each product, use model_dump() to convert to dict and add to database
+for product in products: db.add(database_models.Product(**product.model_dump()))
+9.5 Commit each product addition:  db.commit()
+9.6 Call init_db() at module level to populate initial data
+
+10. GET All Products Endpoint
+10. Create @app.get("/products/") endpoint
+10.1 Inject database dependency: db: Session = Depends(get_db)
+10.2 Query all products: db.query(database_models.Product).all()
+10.3 Return list of products as response
+
+11. GET Product by ID Endpoint
+11. Create @app.get("/products/{id}") endpoint
+11.1 Accept id path parameter as integer
+11.2 Query with filter: db.query(database_models.Product).filter(database_models.Product.id == id).first()
+11.3 Return product if found, else return "not found so far" message
+
+12. POST Create Product Endpoint
+12. Create @app.post("/products/") endpoint
+12.1 Accept Product model as request body: product: Product
+12.2 Convert Pydantic model to SQLAlchemy model using model_dump()
+12.3 Add to database and commit (implied auto-commit behavior)
+12.4 Return the created product
+
+13. PUT Update Product Endpoint
+13. Create @app.put("/products/{id}") endpoint
+13.1 Find existing product by id using filter().first()
+13.2 If found, update all fields: name, description, price, quantity
+13.3 Commit changes to database
+13.4 Return updated product
+13.5 If not found, return "Product NOT Found" message
+
+14. DELETE Product Endpoint
+14. Create @app.delete('/products/{id}') endpoint
+14.1 Find product by id using filter().first()
+14.2 If found, delete using db.delete(db_product)
+14.3 Commit the deletion to database
+14.4 Note: Missing return statement after successful deletion (currently only returns on failure)
+
+15. Setting up CORS Middleware in main.py
+15. Import CORSMiddleware from 'fastapi.middleware.cors'
+15.1 Add middleware to app with allow_origins=["http://localhost:3000"], allow_methods=["*"], allow_headers=["*"]
+15.2 This allows frontend requests from React development server
+
+16. Complete Application Setup
+16. Import database_models to create tables: database_models.Base.metadata.create_all(bind=engine)
+16.1 This creates the product table if it doesn't exist
+16.2 All endpoints follow RESTful conventions for CRUD operations
+
+Notes for Improvement
+- Line 38-39: Better to commit once after the loop instead of inside it
+- Line 53: Return HTTP 404 status code instead of plain string
+- Line 85: Return HTTP 404 for not found cases
+- Line 100-102: Add return statement for successful deletion (e.g., {"message": "product deleted"})
+- Consider adding response models with proper HTTP status codes
