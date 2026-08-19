@@ -1,11 +1,15 @@
-from fastapi import FastAPI,Depends
-from model import Product
-from database import session,engine
+from fastapi import FastAPI,Depends,HTTPException
+from model import Product ,ProductUpdate
+from db.database import session,engine
 import database_models
+from typing import Annotated
 from sqlalchemy.orm import Session
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.security import OAuth2PasswordBearer,OAuth2PasswordRequestForm
+from user_models import User
 
 app = FastAPI()
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:3000"],
@@ -39,6 +43,21 @@ def init_db ():
             db.commit()
 init_db()
 
+
+def fake_decode_token(token):
+    return User(
+        username=token + "fakedecoded", email="john@example.com", full_name="John Doe"
+    )
+
+
+async def get_current_user(token: Annotated[str, Depends(oauth2_scheme)]):
+    user = fake_decode_token(token)
+    return user
+
+
+@app.get("/users/me")
+async def read_users_me(current_user: Annotated[User, Depends(get_current_user)]):
+    return current_user
 
 @app.get("/products/")
 def get_all_products(db:Session=Depends(get_db)):
@@ -78,7 +97,23 @@ def product_by_id(id:int,db:Session=Depends(get_db)):
 @app.post("/products/")
 def add_product(product:Product,db:Session=Depends(get_db)):
     db.add(database_models.Product(**product.model_dump()))
+    db.commit()
     return product
+
+@app.patch("/products/{id}")
+def update_product_partial(id: int,product_update: ProductUpdate,db: Session = Depends(get_db)):
+    # Get the product from database
+    db_product = db.query(database_models.Product).filter(database_models.Product.id == id).first()
+    if not db_product:
+        raise HTTPException(status_code=404, detail="Product NOT Found")
+    # Update only the fields that were provided
+    update_data = product_update.model_dump(exclude_unset=True)
+    for field, value in update_data.items():
+        setattr(db_product, field, value)
+    
+    db.commit()
+    db.refresh(db_product)  # Refresh to get updated data
+    return db_product
 
 @app.put("/products/{id}")
 def update_product(id:int,product:Product,db:Session=Depends(get_db)):
